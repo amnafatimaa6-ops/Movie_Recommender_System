@@ -1,32 +1,44 @@
+# app.py
 import streamlit as st
-from movie_recommender import recommend_movies, recommend_by_genre, get_movie_list, get_genre_list
+from movie_recommender import fetch_movie, fetch_movies_by_genre, recommend_similar_movies
 
-# --- Page config ---
 st.set_page_config(page_title="Movie Recommender", layout="wide")
-st.title("🎬 Movie Recommender")
+st.title("🎬 Movie Recommendation App")
 
-# --- Sidebar: Select mode ---
-st.sidebar.header("Choose Recommendation Mode")
-mode = st.sidebar.radio("Recommend by:", ["Movie", "Genre"])
+option = st.sidebar.selectbox("Choose Recommendation Type", ["Movie Based", "Genre Based"])
 
-if mode == "Movie":
-    # Recommend by movie
-    favorite_movie = st.sidebar.selectbox("Pick a movie you like:", get_movie_list())
-    num_recs = st.sidebar.slider("Number of recommendations:", 1, 10, 5)
-    
-    if st.sidebar.button("Recommend"):
-        recommendations = recommend_movies(favorite_movie, num_recs)
-        st.subheader("We recommend based on your movie:")
-        for i, movie in enumerate(recommendations, 1):
-            st.write(f"{i}. {movie}")
+if option == "Movie Based":
+    movie_name = st.text_input("Type a movie name")
+    if st.button("Recommend Movies"):
+        if not movie_name:
+            st.warning("Type a movie first!")
+        else:
+            recs = recommend_similar_movies(movie_name)
+            if not recs:
+                st.info("No similar movies found.")
+            else:
+                cols = st.columns(3)
+                for i, movie in enumerate(recs):
+                    poster = movie.get('Poster')
+                    with cols[i % 3]:
+                        if poster != "N/A":
+                            st.image(poster)
+                        st.caption(f"{movie['Title']} ({movie.get('Year','')})")
 
-else:
-    # Recommend by genre
-    genre = st.sidebar.selectbox("Pick a genre:", get_genre_list())
-    num_recs = st.sidebar.slider("Number of recommendations:", 1, 10, 5)
-    
-    if st.sidebar.button("Recommend by Genre"):
-        recommendations = recommend_by_genre(genre, num_recs)
-        st.subheader(f"We recommend from {genre} movies:")
-        for i, movie in enumerate(recommendations, 1):
-            st.write(f"{i}. {movie}")
+elif option == "Genre Based":
+    genre_name = st.text_input("Type a genre (e.g., Action, Comedy, Drama)")
+    if st.button("Show Movies"):
+        if not genre_name:
+            st.warning("Type a genre first!")
+        else:
+            recs = fetch_movies_by_genre(genre_name)
+            if not recs:
+                st.info("No movies found in this genre.")
+            else:
+                cols = st.columns(3)
+                for i, movie in enumerate(recs):
+                    poster = movie.get('Poster')
+                    with cols[i % 3]:
+                        if poster != "N/A":
+                            st.image(poster)
+                        st.caption(f"{movie['Title']} ({movie.get('Year','')})")
