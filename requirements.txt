@@ -1,16 +1,17 @@
 # Core libraries
 pandas==2.1.0
-numpy==1.26.5
+numpy==1.26.4
 matplotlib==3.8.1
 seaborn==0.12.3
 
-# Streamlit app
+# Streamlit
 streamlit==1.28.0
 
-# NLP & preprocessing
+# NLP & embeddings
 nltk==3.8.1
 scikit-learn==1.3.0
 sentence-transformers==2.2.2
+torch>=2.1.0
 
-# Optional: progress bar & utils
+# Optional utils
 tqdm==4.66.1
