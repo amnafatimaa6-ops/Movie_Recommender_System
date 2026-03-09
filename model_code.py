@@ -3,18 +3,33 @@ import pandas as pd
 import numpy as np
 import re
 import ast
+import nltk
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
-import nltk
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
+import os
 
-# Download NLTK resources (only first time)
-nltk.download('stopwords')
-nltk.download('wordnet')
+# ------------------- NLTK setup ------------------- #
+# Use a local folder for nltk data (put nltk_data folder in repo if possible)
+nltk_data_path = "./nltk_data"
+if not os.path.exists(nltk_data_path):
+    os.makedirs(nltk_data_path)
 
-# Prepare preprocessing tools
-stop_words = set(stopwords.words('english'))
+nltk.data.path.append(nltk_data_path)
+
+# Download only if missing
+try:
+    stop_words = set(stopwords.words('english'))
+except:
+    nltk.download('stopwords', download_dir=nltk_data_path)
+    stop_words = set(stopwords.words('english'))
+
+try:
+    _ = nltk.corpus.wordnet.ensure_loaded()
+except:
+    nltk.download('wordnet', download_dir=nltk_data_path)
+
 lemmatizer = WordNetLemmatizer()
 
 # ------------------- Text preprocessing ------------------- #
