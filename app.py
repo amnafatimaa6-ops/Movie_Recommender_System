@@ -1,77 +1,66 @@
-# app.py
-import streamlit as st
+# model_code.py
 import pandas as pd
-import re, ast
-from model_code import recommend, semantic_recommend, recommend_by_genre_from_tags, process_text, parse_genres
+import numpy as np
+import re
+import ast
+from nltk.corpus import stopwords
+from nltk.stem import WordNetLemmatizer
+import nltk
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sentence_transformers import SentenceTransformer
+from sklearn.metrics.pairwise import cosine_similarity
 
-@st.cache_data
-def load_data():
-    # ---- Google Drive IDs ----
-    clean_file_id = "1VUTcCivOodVHSfwxSdeKVeNFazdJaCq-"  # Clean CSV (for recommendation)
-    raw_file_id = "1KdZYGA_gR3Cip09HvwYZf7gGi6aQY6rm"    # Original dataset (raw)
+# Download NLTK resources (only first time)
+nltk.download('stopwords')
+nltk.download('wordnet')
 
-    clean_url = f"https://drive.google.com/uc?id={clean_file_id}"
-    raw_url = f"https://drive.google.com/uc?id={raw_file_id}"
+# Prepare preprocessing tools
+stop_words = set(stopwords.words('english'))
+lemmatizer = WordNetLemmatizer()
 
-    # Load datasets
-    df_clean = pd.read_csv(clean_url)
-    df_raw = pd.read_csv(raw_url)
+# ------------------- Text preprocessing ------------------- #
+def process_text(text):
+    text = str(text).lower()  # lowercase
+    text = re.sub(r'[^a-zA-Z\s]', '', text)  # remove punctuation
+    words = text.split()
+    words = [lemmatizer.lemmatize(word) for word in words if word not in stop_words]  # remove stopwords & lemmatize
+    return " ".join(words)
 
-    # Preprocess the clean dataset for recommendations
-    df_clean = df_clean.drop_duplicates().reset_index(drop=True)
-    df_clean = df_clean[['title','overview','genres','tagline','vote_average','popularity']]
-    df_clean = df_clean.dropna(subset=['title'])
-    df_clean['overview'] = df_clean['overview'].fillna('')
-    df_clean['tagline'] = df_clean['tagline'].fillna('')
-    df_clean['genres'] = df_clean['genres'].apply(parse_genres)
-    df_clean['tags'] = df_clean['overview'] + ' ' + df_clean['genres'] + ' ' + df_clean['tagline']
-    df_clean['tags'] = df_clean['tags'].apply(process_text)
+# ------------------- Genre parsing ------------------- #
+def parse_genres(x):
+    try:
+        if isinstance(x, list):
+            return ' '.join([i['name'] for i in x])
+        elif isinstance(x, str):
+            data = ast.literal_eval(x)
+            return ' '.join([i['name'] for i in data])
+        else:
+            return ''
+    except:
+        return ''
 
-    # TF-IDF vectorization
-    tfidf = TfidfVectorizer(max_features=5000, ngram_range=(1,2), stop_words='english')
-    tfidf_matrix = tfidf.fit_transform(df_clean['tags'])
+# ------------------- Movie-based recommendation ------------------- #
+def recommend(title, df, indices, tfidf_matrix, n=10):
+    if title not in indices:
+        return ['Movie not found']
+    idx = indices[title]
+    sim_scores = cosine_similarity(tfidf_matrix[idx], tfidf_matrix).flatten()
+    similar_idx = sim_scores.argsort()[::-1][1:n+1]
+    return df['title'].iloc[similar_idx].values
 
-    # SentenceTransformer embeddings
-    model = SentenceTransformer('all-MiniLM-L6-v2')
-    embeddings = model.encode(df_clean['tags'].tolist(), show_progress_bar=True)
+# ------------------- Semantic recommendation ------------------- #
+def semantic_recommend(title, df, indices, embeddings, n=10):
+    if title not in indices:
+        return ['Movie not found']
+    idx = indices[title]
+    movie_emb = embeddings[idx]
+    sim_scores = np.dot(embeddings, movie_emb) / (np.linalg.norm(embeddings, axis=1) * np.linalg.norm(movie_emb))
+    similar_idx = sim_scores.argsort()[::-1][1:n+1]
+    return df['title'].iloc[similar_idx].values
 
-    # Build indices map
-    indices = pd.Series(df_clean.index, index=df_clean['title']).drop_duplicates()
-
-    return df_clean, df_raw, tfidf_matrix, indices, embeddings
-
-# Load both datasets
-df_clean, df_raw, tfidf_matrix, indices, embeddings = load_data()
-
-st.title("🎬 Movie Recommender App")
-
-# ---------------- Raw dataset preview ---------------- #
-st.subheader("Raw Dataset Preview (for reference)")
-st.dataframe(df_raw.head(10))
-
-st.markdown("---")
-
-# ---------------- Movie‑based recommendations ---------------- #
-st.subheader("Search by movie")
-selected_movie = st.selectbox("Choose a movie:", df_clean['title'].tolist())
-
-if st.button("Recommend"):
-    recs = semantic_recommend(selected_movie, df_clean, indices, embeddings)
-    st.write(f"**Movies similar to '{selected_movie}':**")
-    for r in recs:
-        st.text(r)
-
-st.markdown("---")
-
-# ---------------- Genre‑based recommendations ---------------- #
-st.subheader("Search by genre")
-genre_list = sorted(df_clean['genres'].unique().tolist())
-selected_genre = st.selectbox("Choose a genre:", genre_list)
-
-if st.button("Recommend by Genre"):
-    genre_recs = recommend_by_genre_from_tags(selected_genre, df_clean)
-    st.write(f"**Movies in '{selected_genre}' genre:**")
-    for g in genre_recs:
-        st.text(g)
+# ------------------- Genre-based recommendation ------------------- #
+def recommend_by_genre_from_tags(user_genre, df, n=10):
+    user_genre = user_genre.lower().strip()
+    genre_filtered_df = df[df['tags'].str.contains(user_genre, case=False, na=False)]
+    if genre_filtered_df.empty:
+        return ['Genre not found']
+    return genre_filtered_df['title'].head(n).values
