@@ -1,2 +1,16 @@
-streamlit
-requests
+# Core libraries
+pandas==2.1.0
+numpy==1.26.5
+matplotlib==3.8.1
+seaborn==0.12.3
+
+# Streamlit app
+streamlit==1.28.0
+
+# NLP & preprocessing
+nltk==3.8.1
+scikit-learn==1.3.0
+sentence-transformers==2.2.2
+
+# Optional: progress bar & utils
+tqdm==4.66.1
