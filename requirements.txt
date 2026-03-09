@@ -12,10 +12,7 @@ matplotlib
 seaborn
 # Streamlit & app utilities
 streamlit
-rich
-pygments
-markdown-it-py
-mdurl
+
 
 # Optional (for progress bars or extra utils)
 tqdm
