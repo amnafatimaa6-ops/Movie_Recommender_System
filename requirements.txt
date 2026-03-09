@@ -1,18 +1,22 @@
-# Core
+# Core data and ML
 pandas==2.1.0
 numpy==1.26.4
-matplotlib==3.7.2
+scikit-learn==1.3.1
+
+# Text & NLP
+nltk==3.8.1
+sentence-transformers==2.2.2
+
+# Visualization
+matplotlib==3.8.1
 seaborn==0.12.2
 
-# Streamlit
-streamlit==1.28.0
-
-# NLP & ML
-nltk==3.8.1
-scikit-learn==1.3.0
-sentence-transformers==2.2.2
-torch>=2.1.0
-
-# Utilities
-tqdm==4.66.1
+# Streamlit & app utilities
+streamlit==1.25.0
 rich==14.3.3
+pygments==2.19.2
+markdown-it-py==4.0.0
+mdurl==0.1.2
+
+# Optional (for progress bars or extra utils)
+tqdm==4.66.1
