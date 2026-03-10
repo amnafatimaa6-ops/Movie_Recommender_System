@@ -1,26 +1,24 @@
+# app.py
 import streamlit as st
 import pandas as pd
 import numpy as np
-import re
-import ast
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+import gdown
+import ast, re
 import nltk
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
 from sentence_transformers import SentenceTransformer
-import gdown
 
-st.set_page_config(page_title="🎬 Movie Recommendation System", layout="wide")
-st.title("🎬 Movie Recommendation System")
+st.set_page_config(page_title="Movie Recommender", page_icon="🎬")
 
-# ------------------- Download CSV from Google Drive ------------------- #
-file_id = "1KdZYGA_gR3Cip09HvwYZf7gGi6aQY6rm"
+# ------------------- Download & Load CSV ------------------- #
+file_id = "1KdZYGA_gR3Cip09HvwYZf7gGi6aQY6rm"  # Google Drive file ID
 url = f"https://drive.google.com/uc?id={file_id}"
 csv_path = "movies_metadata.csv"
 gdown.download(url, csv_path, quiet=False)
 
-# ------------------- Load CSV ------------------- #
 df = pd.read_csv(csv_path, low_memory=False, encoding="utf-8", on_bad_lines="skip")
 
 # ------------------- Data Cleaning ------------------- #
@@ -36,7 +34,7 @@ nltk.download('wordnet')
 stop_words = set(stopwords.words('english'))
 lemmatizer = WordNetLemmatizer()
 
-# ------------------- Text Preprocessing ------------------- #
+# ------------------- Text Processing ------------------- #
 def parse_genres(x):
     try:
         if isinstance(x, list):
@@ -59,11 +57,12 @@ def process_text(text):
 df['genres'] = df['genres'].apply(parse_genres)
 df['tags'] = (df['overview'] + ' ' + df['genres'] + ' ' + df['tagline']).apply(process_text)
 
-# ------------------- Indices and Matrices ------------------- #
+# ------------------- Build Indices & TF-IDF ------------------- #
 indices = pd.Series(df.index, index=df['title']).drop_duplicates()
 tfidf = TfidfVectorizer(max_features=5000, stop_words='english')
 tfidf_matrix = tfidf.fit_transform(df['tags'])
 
+# ------------------- Load Transformer Model ------------------- #
 @st.cache_resource(show_spinner=True)
 def load_transformer_model():
     return SentenceTransformer('all-MiniLM-L6-v2')
@@ -82,9 +81,9 @@ def recommend(title, n=10):
         return ['Movie not found']
     idx = indices[title]
     sim_scores = cosine_similarity(tfidf_matrix[idx], tfidf_matrix).flatten()
-    sim_scores[idx] = -1  # exclude itself
-    similar_idx = np.argsort(sim_scores)[::-1][:min(n, len(df)-1)]
-    return df['title'].iloc[similar_idx].values
+    sim_scores[idx] = -1
+    valid_idx = [i for i in sim_scores.argsort()[::-1] if i < len(df)]
+    return df['title'].iloc[valid_idx[:min(n, len(valid_idx))]].values
 
 def semantic_recommend(title, n=10):
     if title not in indices:
@@ -93,8 +92,8 @@ def semantic_recommend(title, n=10):
     movie_emb = embeddings[idx]
     sim_scores = np.dot(embeddings, movie_emb) / (np.linalg.norm(embeddings, axis=1) * np.linalg.norm(movie_emb))
     sim_scores[idx] = -1
-    similar_idx = np.argsort(sim_scores)[::-1][:min(n, len(df)-1)]
-    return df['title'].iloc[similar_idx].values
+    valid_idx = [i for i in sim_scores.argsort()[::-1] if i < len(df)]
+    return df['title'].iloc[valid_idx[:min(n, len(valid_idx))]].values
 
 def hybrid_recommend(title, n=10, tfidf_weight=0.4, transformer_weight=0.6):
     if title not in indices:
@@ -105,8 +104,8 @@ def hybrid_recommend(title, n=10, tfidf_weight=0.4, transformer_weight=0.6):
     transformer_sim = np.dot(embeddings, movie_emb) / (np.linalg.norm(embeddings, axis=1) * np.linalg.norm(movie_emb))
     combined_sim = tfidf_weight * tfidf_sim + transformer_weight * transformer_sim
     combined_sim[idx] = -1
-    similar_idx = np.argsort(combined_sim)[::-1][:min(n, len(df)-1)]
-    return df['title'].iloc[similar_idx].values
+    valid_idx = [i for i in combined_sim.argsort()[::-1] if i < len(df)]
+    return df['title'].iloc[valid_idx[:min(n, len(valid_idx))]].values
 
 def recommend_by_genre_from_tags(user_genre, n=10):
     user_genre = user_genre.lower().strip()
@@ -116,32 +115,24 @@ def recommend_by_genre_from_tags(user_genre, n=10):
     return genre_filtered_df['title'].head(n).values
 
 # ------------------- Streamlit UI ------------------- #
+st.title("🎬 Movie Recommendation System")
 option = st.sidebar.selectbox(
     "Choose Recommendation Type",
     ("TF-IDF Movie Based", "Semantic Movie Based", "Hybrid Movie Based", "Genre Based")
 )
 
-if option == "TF-IDF Movie Based":
+if option in ["TF-IDF Movie Based", "Semantic Movie Based", "Hybrid Movie Based"]:
     movie_name = st.selectbox("Select a movie", df['title'].sort_values())
     if st.button("Recommend"):
-        results = recommend(movie_name)
-        st.subheader("Recommended Movies (TF-IDF)")
-        for movie in results:
-            st.write(movie)
-
-elif option == "Semantic Movie Based":
-    movie_name = st.selectbox("Select a movie", df['title'].sort_values())
-    if st.button("Recommend"):
-        results = semantic_recommend(movie_name)
-        st.subheader("Recommended Movies (Semantic Transformer)")
-        for movie in results:
-            st.write(movie)
-
-elif option == "Hybrid Movie Based":
-    movie_name = st.selectbox("Select a movie", df['title'].sort_values())
-    if st.button("Recommend"):
-        results = hybrid_recommend(movie_name)
-        st.subheader("Recommended Movies (Hybrid TF-IDF + Transformer)")
+        if option == "TF-IDF Movie Based":
+            results = recommend(movie_name)
+            st.subheader("Recommended Movies (TF-IDF)")
+        elif option == "Semantic Movie Based":
+            results = semantic_recommend(movie_name)
+            st.subheader("Recommended Movies (Semantic Transformer)")
+        else:
+            results = hybrid_recommend(movie_name)
+            st.subheader("Recommended Movies (Hybrid TF-IDF + Transformer)")
         for movie in results:
             st.write(movie)
 
@@ -149,6 +140,6 @@ elif option == "Genre Based":
     genre = st.text_input("Enter genre (Action, Comedy, Horror etc)")
     if st.button("Recommend"):
         results = recommend_by_genre_from_tags(genre)
-        st.subheader("Recommended Movies by Genre")
+        st.subheader("Recommended Movies")
         for movie in results:
             st.write(movie)
