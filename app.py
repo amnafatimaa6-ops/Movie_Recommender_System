@@ -3,17 +3,17 @@ import pandas as pd
 import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 import gdown  # to download from Google Drive
-
+import ast, re
+from nltk.corpus import stopwords
+from nltk.stem import WordNetLemmatizer
+import nltk
 from model_code import recommend, recommend_by_genre_from_tags
 
 st.title("🎬 Movie Recommendation System")
 
 # ------------------- Google Drive CSV ------------------- #
-# Google Drive file ID
-file_id = "1KdZYGA_gR3Cip09HvwYZf7gGi6aQY6rm"  # your link: https://drive.google.com/file/d/1KdZYGA_gR3Cip09HvwYZf7gGi6aQY6rm/view?usp=sharing
+file_id = "1KdZYGA_gR3Cip09HvwYZf7gGi6aQY6rm"
 url = f"https://drive.google.com/uc?id={file_id}"
-
-# Download CSV to local cache
 csv_path = "movies_metadata.csv"
 gdown.download(url, csv_path, quiet=False)
 
@@ -21,24 +21,19 @@ gdown.download(url, csv_path, quiet=False)
 df = pd.read_csv(csv_path, low_memory=False, encoding="utf-8", on_bad_lines="skip")
 
 # ------------------- Clean & prepare for recommendation ------------------- #
-# Drop duplicates and select relevant columns
 df = df.drop_duplicates().reset_index(drop=True)
 df = df[['title','overview','genres','tagline','vote_average','popularity']]
 df = df.dropna(subset=['title'])
 df['overview'] = df['overview'].fillna('')
 df['tagline'] = df['tagline'].fillna('')
 
-# Preprocess genres and create tags
-import ast, re
-from nltk.corpus import stopwords
-from nltk.stem import WordNetLemmatizer
-import nltk
+# NLTK setup
 nltk.download('stopwords')
 nltk.download('wordnet')
-
 stop_words = set(stopwords.words('english'))
 lemmatizer = WordNetLemmatizer()
 
+# Genre parsing
 def parse_genres(x):
     try:
         if isinstance(x, list):
@@ -51,6 +46,7 @@ def parse_genres(x):
     except:
         return ''
 
+# Text preprocessing
 def process_text(text):
     text = str(text).lower()
     text = re.sub(r'[^a-zA-Z\s]', '', text)
@@ -75,7 +71,9 @@ option = st.sidebar.selectbox(
 )
 
 if option == "Movie Based":
-    movie_name = st.text_input("Enter movie name")
+    # Dropdown to choose a movie from dataset
+    movie_name = st.selectbox("Select a movie", df['title'].sort_values())
+    
     if st.button("Recommend"):
         results = recommend(movie_name, df, indices, tfidf_matrix)
         st.subheader("Recommended Movies")
