@@ -2,18 +2,22 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
+import gdown  # to download from Google Drive
 import ast, re
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
 import nltk
 from model_code import recommend, recommend_by_genre_from_tags
-from sentence_transformers import SentenceTransformer
 
 st.title("🎬 Movie Recommendation System")
 
-# ------------------- Load CSV ------------------- #
-# Make sure movies_metadata.csv is uploaded to the repo or Streamlit Cloud
+# ------------------- Google Drive CSV ------------------- #
+file_id = "1KdZYGA_gR3Cip09HvwYZf7gGi6aQY6rm"
+url = f"https://drive.google.com/uc?id={file_id}"
 csv_path = "movies_metadata.csv"
+gdown.download(url, csv_path, quiet=False)
+
+# ------------------- Load CSV ------------------- #
 df = pd.read_csv(csv_path, low_memory=False, encoding="utf-8", on_bad_lines="skip")
 
 # ------------------- Clean & prepare for recommendation ------------------- #
@@ -60,48 +64,19 @@ indices = pd.Series(df.index, index=df['title']).drop_duplicates()
 tfidf = TfidfVectorizer(max_features=5000, stop_words='english')
 tfidf_matrix = tfidf.fit_transform(df['tags'])
 
-# ------------------- Semantic Transformer ------------------- #
-@st.cache_resource(show_spinner=True)
-def load_transformer_model():
-    return SentenceTransformer('all-MiniLM-L6-v2')
-
-model = load_transformer_model()
-
-@st.cache_data(show_spinner=True)
-def compute_embeddings(tags):
-    return model.encode(tags.tolist(), show_progress_bar=True)
-
-embeddings = compute_embeddings(df['tags'])
-
-# Semantic recommendation function
-def semantic_recommend(title, df, indices, embeddings, n=10):
-    if title not in indices:
-        return ['Movie not found']
-    idx = indices[title]
-    movie_emb = embeddings[idx]
-    sim_scores = np.dot(embeddings, movie_emb) / (np.linalg.norm(embeddings, axis=1) * np.linalg.norm(movie_emb))
-    similar_idx = sim_scores.argsort()[::-1][1:n+1]
-    return df['title'].iloc[similar_idx].values
-
 # ------------------- Streamlit UI ------------------- #
 option = st.sidebar.selectbox(
     "Choose Recommendation Type",
-    ("Movie Based", "Genre Based", "Semantic Movie Based")
+    ("Movie Based", "Genre Based")
 )
 
 if option == "Movie Based":
+    # Dropdown to choose a movie from dataset
     movie_name = st.selectbox("Select a movie", df['title'].sort_values())
+    
     if st.button("Recommend"):
         results = recommend(movie_name, df, indices, tfidf_matrix)
-        st.subheader("Recommended Movies (TF-IDF)")
-        for movie in results:
-            st.write(movie)
-
-elif option == "Semantic Movie Based":
-    movie_name = st.selectbox("Select a movie", df['title'].sort_values())
-    if st.button("Recommend"):
-        results = semantic_recommend(movie_name, df, indices, embeddings)
-        st.subheader("Recommended Movies (Semantic Transformer)")
+        st.subheader("Recommended Movies")
         for movie in results:
             st.write(movie)
 
@@ -109,6 +84,6 @@ elif option == "Genre Based":
     genre = st.text_input("Enter genre (Action, Comedy, Horror etc)")
     if st.button("Recommend"):
         results = recommend_by_genre_from_tags(genre, df)
-        st.subheader("Recommended Movies (Genre)")
+        st.subheader("Recommended Movies")
         for movie in results:
             st.write(movie)
