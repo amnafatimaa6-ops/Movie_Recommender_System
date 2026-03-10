@@ -3,6 +3,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
 import gdown
 import ast
 import re
@@ -10,7 +11,6 @@ import nltk
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
 from sentence_transformers import SentenceTransformer
-from sklearn.metrics.pairwise import cosine_similarity
 
 st.title("🎬 Movie Recommendation System")
 
@@ -23,7 +23,7 @@ gdown.download(url, csv_path, quiet=False)
 # ------------------- Load CSV ------------------- #
 df = pd.read_csv(csv_path, low_memory=False, encoding="utf-8", on_bad_lines="skip")
 
-# ------------------- Clean & prepare for recommendation ------------------- #
+# ------------------- Clean & prepare ------------------- #
 df = df.drop_duplicates().reset_index(drop=True)
 df = df[['title','overview','genres','tagline','vote_average','popularity']]
 df = df.dropna(subset=['title'])
@@ -73,7 +73,14 @@ def recommend(title, n=10):
     similar_idx = sim_scores.argsort()[::-1][1:n+1]
     return df['title'].iloc[similar_idx].values
 
-# Load semantic transformer and compute embeddings
+def recommend_by_genre_from_tags(user_genre, n=10):
+    user_genre = user_genre.lower().strip()
+    genre_filtered_df = df[df['tags'].str.contains(user_genre, case=False, na=False)]
+    if genre_filtered_df.empty:
+        return ['Genre not found']
+    return genre_filtered_df['title'].head(n).values
+
+# ------------------- Load semantic transformer & compute embeddings ------------------- #
 @st.cache_resource(show_spinner=True)
 def load_transformer_model():
     return SentenceTransformer('all-MiniLM-L6-v2')
@@ -95,17 +102,33 @@ def semantic_recommend(title, n=10):
     similar_idx = sim_scores.argsort()[::-1][1:n+1]
     return df['title'].iloc[similar_idx].values
 
-def recommend_by_genre_from_tags(user_genre, n=10):
-    user_genre = user_genre.lower().strip()
-    genre_filtered_df = df[df['tags'].str.contains(user_genre, case=False, na=False)]
-    if genre_filtered_df.empty:
-        return ['Genre not found']
-    return genre_filtered_df['title'].head(n).values
+# ------------------- Hybrid recommendation ------------------- #
+def hybrid_recommend(title, n=10, alpha=0.5):
+    """
+    Combines TF-IDF and semantic embeddings.
+    alpha: weight for TF-IDF (0-1), 1-alpha weight for semantic
+    """
+    if title not in indices:
+        return ['Movie not found']
+    idx = indices[title]
+    
+    # TF-IDF similarity
+    tfidf_sim = cosine_similarity(tfidf_matrix[idx], tfidf_matrix).flatten()
+    
+    # Semantic similarity
+    movie_emb = embeddings[idx]
+    sem_sim = np.dot(embeddings, movie_emb) / (np.linalg.norm(embeddings, axis=1) * np.linalg.norm(movie_emb))
+    
+    # Combine
+    combined_sim = alpha * tfidf_sim + (1 - alpha) * sem_sim
+    similar_idx = combined_sim.argsort()[::-1][1:n+1]
+    
+    return df['title'].iloc[similar_idx].values
 
 # ------------------- Streamlit UI ------------------- #
 option = st.sidebar.selectbox(
     "Choose Recommendation Type",
-    ("Movie Based", "Semantic Movie Based", "Genre Based")
+    ("Movie Based", "Semantic Movie Based", "Hybrid Recommendation", "Genre Based")
 )
 
 if option == "Movie Based":
@@ -121,6 +144,15 @@ elif option == "Semantic Movie Based":
     if st.button("Recommend"):
         results = semantic_recommend(movie_name)
         st.subheader("Recommended Movies (Semantic Transformer)")
+        for movie in results:
+            st.write(movie)
+
+elif option == "Hybrid Recommendation":
+    movie_name = st.selectbox("Select a movie", df['title'].sort_values())
+    alpha = st.slider("Weight for TF-IDF vs Semantic (higher = more TF-IDF)", 0.0, 1.0, 0.5)
+    if st.button("Recommend"):
+        results = hybrid_recommend(movie_name, alpha=alpha)
+        st.subheader(f"Recommended Movies (Hybrid, α={alpha})")
         for movie in results:
             st.write(movie)
 
