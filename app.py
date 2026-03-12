@@ -141,7 +141,6 @@ def semantic_recommend(title, n=10):
     ].copy().assign(
         similarity=sim_scores[similar_idx]
     )
-
 def hybrid_recommend(title, n=10, tfidf_weight=0.5, semantic_weight=0.5):
 
     if title not in indices:
@@ -151,9 +150,14 @@ def hybrid_recommend(title, n=10, tfidf_weight=0.5, semantic_weight=0.5):
 
     tfidf_sim = cosine_similarity(tfidf_matrix[idx], tfidf_matrix).flatten()
 
-    movie_emb = embeddings[idx].reshape(1,-1)
-
+    movie_emb = embeddings[idx].reshape(1, -1)
     semantic_sim = cosine_similarity(movie_emb, embeddings).flatten()
+
+    # Fix size mismatch
+    min_len = min(len(tfidf_sim), len(semantic_sim))
+
+    tfidf_sim = tfidf_sim[:min_len]
+    semantic_sim = semantic_sim[:min_len]
 
     combined_sim = tfidf_weight * tfidf_sim + semantic_weight * semantic_sim
 
