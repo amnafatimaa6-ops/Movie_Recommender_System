@@ -13,7 +13,7 @@ import gdown
 st.set_page_config(page_title="🎬 Movie Recommender", layout="wide")
 st.title("🎬 Movie Recommendation System")
 
-# ------------------ Download & Load Dataset ------------------ #
+# ------------------ Download Dataset ------------------ #
 file_id = "1KdZYGA_gR3Cip09HvwYZf7gGi6aQY6rm"
 url = f"https://drive.google.com/uc?id={file_id}"
 csv_path = "movies_metadata.csv"
@@ -21,14 +21,20 @@ csv_path = "movies_metadata.csv"
 if not os.path.exists(csv_path):
     gdown.download(url, csv_path, quiet=False)
 
+# ------------------ Load Dataset ------------------ #
 df = pd.read_csv(csv_path, low_memory=False, encoding="utf-8", on_bad_lines="skip")
 
-df = df.drop_duplicates().reset_index(drop=True)
+# Remove duplicates
+df = df.drop_duplicates(subset=['title']).reset_index(drop=True)
+
 df = df[['title','overview','genres','tagline','vote_average','popularity']]
+
 df = df.dropna(subset=['title'])
 
 df['overview'] = df['overview'].fillna('')
 df['tagline'] = df['tagline'].fillna('')
+df['popularity'] = df['popularity'].fillna(0)
+df['vote_average'] = df['vote_average'].fillna(0)
 
 # ------------------ NLTK Setup ------------------ #
 nltk.download('stopwords')
@@ -37,7 +43,7 @@ nltk.download('wordnet')
 stop_words = set(stopwords.words('english'))
 lemmatizer = WordNetLemmatizer()
 
-# ------------------ Text Preprocessing ------------------ #
+# ------------------ Text Processing ------------------ #
 def parse_genres(x):
     try:
         if isinstance(x, list):
@@ -80,7 +86,7 @@ def load_transformer_model():
 
 transformer_model = load_transformer_model()
 
-# ------------------ Embeddings Cache ------------------ #
+# ------------------ Embedding Cache ------------------ #
 embedding_file = "embeddings.pkl"
 
 @st.cache_data(show_spinner=True)
@@ -103,7 +109,7 @@ else:
 def recommend(title, n=10):
 
     if title not in indices:
-        return pd.DataFrame([{'title':'Movie not found','vote_average':0,'overview':'','similarity':0}])
+        return pd.DataFrame()
 
     idx = indices[title]
 
@@ -111,14 +117,16 @@ def recommend(title, n=10):
 
     similar_idx = sim_scores.argsort()[::-1][1:n+1]
 
-    return df.iloc[similar_idx][['title','vote_average','overview']].copy().assign(
+    return df.iloc[similar_idx][
+        ['title','vote_average','overview','popularity']
+    ].copy().assign(
         similarity=sim_scores[similar_idx]
     )
 
 def semantic_recommend(title, n=10):
 
     if title not in indices:
-        return pd.DataFrame([{'title':'Movie not found','vote_average':0,'overview':'','similarity':0}])
+        return pd.DataFrame()
 
     idx = indices[title]
 
@@ -128,14 +136,16 @@ def semantic_recommend(title, n=10):
 
     similar_idx = sim_scores.argsort()[::-1][1:n+1]
 
-    return df.iloc[similar_idx][['title','vote_average','overview']].copy().assign(
+    return df.iloc[similar_idx][
+        ['title','vote_average','overview','popularity']
+    ].copy().assign(
         similarity=sim_scores[similar_idx]
     )
 
 def hybrid_recommend(title, n=10, tfidf_weight=0.5, semantic_weight=0.5):
 
     if title not in indices:
-        return pd.DataFrame([{'title':'Movie not found','vote_average':0,'overview':'','similarity':0}])
+        return pd.DataFrame()
 
     idx = indices[title]
 
@@ -149,7 +159,9 @@ def hybrid_recommend(title, n=10, tfidf_weight=0.5, semantic_weight=0.5):
 
     similar_idx = combined_sim.argsort()[::-1][1:n+1]
 
-    return df.iloc[similar_idx][['title','vote_average','overview']].copy().assign(
+    return df.iloc[similar_idx][
+        ['title','vote_average','overview','popularity']
+    ].copy().assign(
         similarity=combined_sim[similar_idx]
     )
 
@@ -160,9 +172,11 @@ def recommend_by_genre_from_tags(user_genre, n=10):
     genre_filtered_df = df[df['tags'].str.contains(user_genre, case=False, na=False)]
 
     if genre_filtered_df.empty:
-        return pd.DataFrame([{'title':'Genre not found','vote_average':0,'overview':'','similarity':0}])
+        return pd.DataFrame()
 
-    return genre_filtered_df.head(n)[['title','vote_average','overview']].copy().assign(similarity=1.0)
+    return genre_filtered_df.head(n)[
+        ['title','vote_average','overview','popularity']
+    ].copy().assign(similarity=1.0)
 
 # ------------------ Streamlit UI ------------------ #
 option = st.sidebar.selectbox(
@@ -203,34 +217,33 @@ if option in [
             results = hybrid_recommend(movie_name)
             st.subheader("Recommended Movies (Hybrid)")
 
-        # Evaluation metric
-        avg_similarity = results['similarity'].mean()
+        if results.empty:
+            st.warning("No recommendations found.")
+        else:
 
-        st.markdown(
-            f"**Evaluation Metric:** Average similarity of recommendations = {avg_similarity:.2f}"
-        )
+            avg_similarity = results['similarity'].mean()
 
-        for idx, row in results.iterrows():
+            st.markdown(
+                f"**Evaluation Metric:** Average similarity = {avg_similarity:.2f}"
+            )
 
-            st.markdown(f"### 🎬 {row['title']}")
+            for idx, row in results.iterrows():
 
-            col1, col2 = st.columns(2)
+                st.markdown(f"### 🎬 {row['title']}")
 
-            with col1:
+                col1, col2 = st.columns(2)
 
-                st.write(f"⭐ **Rating:** {row['vote_average']}")
-                st.write(f"📊 **Similarity Score:** {row['similarity']:.2f}")
+                with col1:
+                    st.write(f"⭐ **Rating:** {row['vote_average']}")
+                    st.write(f"📊 **Similarity Score:** {row['similarity']:.2f}")
 
-            with col2:
+                with col2:
+                    st.write(f"🔥 **Popularity:** {row['popularity']:.2f}")
 
-                st.write(
-                    f"🔥 **Popularity:** {df.loc[df['title']==row['title'],'popularity'].values[0]:.2f}"
-                )
+                st.write("📝 **Overview:**")
+                st.write(row['overview'])
 
-            st.write("📝 **Overview:**")
-            st.write(row['overview'])
-
-            st.divider()
+                st.divider()
 
 elif option == "Genre Based":
 
@@ -242,11 +255,15 @@ elif option == "Genre Based":
 
         st.subheader(f"Recommended Movies for Genre: {genre}")
 
-        for idx, row in results.iterrows():
+        if results.empty:
+            st.warning("No movies found for this genre.")
 
-            st.markdown(f"### 🎬 {row['title']}")
+        else:
+            for idx, row in results.iterrows():
 
-            st.write(f"⭐ **Rating:** {row['vote_average']}")
-            st.write(row['overview'])
+                st.markdown(f"### 🎬 {row['title']}")
+                st.write(f"⭐ **Rating:** {row['vote_average']}")
+                st.write(f"🔥 **Popularity:** {row['popularity']}")
+                st.write(row['overview'])
 
-            st.divider()
+                st.divider()
