@@ -127,42 +127,52 @@ option = st.sidebar.selectbox(
 
 if option in ["TF-IDF Movie Based", "Semantic Movie Based", "Hybrid Recommendation"]:
     movie_name = st.selectbox("Select a movie", df['title'].sort_values())
+
     if st.button("Recommend"):
+
         if option == "TF-IDF Movie Based":
             results = recommend(movie_name)
             st.subheader("Recommended Movies (TF-IDF)")
+
         elif option == "Semantic Movie Based":
             results = semantic_recommend(movie_name)
             st.subheader("Recommended Movies (Semantic Transformer)")
+
         else:
             results = hybrid_recommend(movie_name)
             st.subheader("Recommended Movies (Hybrid)")
 
+        # Evaluation metric
         avg_similarity = results['similarity'].mean()
         st.markdown(f"**Evaluation Metric:** Average similarity of recommendations = {avg_similarity:.2f}")
-for idx, row in results.iterrows():
-    st.markdown(f"### 🎬 {row['title']}")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.write(f"⭐ **Rating:** {row['vote_average']}")
-        st.write(f"📊 **Similarity Score:** {row['similarity']:.2f}")
-    
-    with col2:
-        st.write(f"🔥 **Popularity:** {df.loc[df['title']==row['title'], 'popularity'].values[0]:.2f}")
-    
-    st.write("📝 **Overview:**")
-    st.write(row['overview'])
-    
-    st.divider()
+
+        # Display results
+        for idx, row in results.iterrows():
+            st.markdown(f"### 🎬 {row['title']}")
+
+            col1, col2 = st.columns(2)
+
+            with col1:
+                st.write(f"⭐ **Rating:** {row['vote_average']}")
+                st.write(f"📊 **Similarity Score:** {row['similarity']:.2f}")
+
+            with col2:
+                st.write(f"🔥 **Popularity:** {df.loc[df['title']==row['title'], 'popularity'].values[0]:.2f}")
+
+            st.write("📝 **Overview:**")
+            st.write(row['overview'])
+
+            st.divider()
+
 elif option == "Genre Based":
     genre = st.text_input("Enter genre (Action, Comedy, Horror etc)")
+
     if st.button("Recommend"):
         results = recommend_by_genre_from_tags(genre)
         st.subheader(f"Recommended Movies for Genre: {genre}")
+
         for idx, row in results.iterrows():
-            st.markdown(f"**{row['title']}**  — Rating: {row['vote_average']}")
+            st.markdown(f"### 🎬 {row['title']}")
+            st.write(f"⭐ **Rating:** {row['vote_average']}")
             st.write(row['overview'])
-            st.markdown(f"*Why this movie?*: Because it matches the genre **{genre}** you selected.")
-            st.write("---")
+            st.divider()
