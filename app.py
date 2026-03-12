@@ -140,13 +140,22 @@ if option in ["TF-IDF Movie Based", "Semantic Movie Based", "Hybrid Recommendati
 
         avg_similarity = results['similarity'].mean()
         st.markdown(f"**Evaluation Metric:** Average similarity of recommendations = {avg_similarity:.2f}")
-
-        for idx, row in results.iterrows():
-            st.markdown(f"**{row['title']}**  — Rating: {row['vote_average']} — Similarity: {row['similarity']:.2f}")
-            st.write(row['overview'])
-            st.markdown(f"*Why this movie?*: Because it shares similar themes, genre, and plot with **{movie_name}**.")
-            st.write("---")
-
+for idx, row in results.iterrows():
+    st.markdown(f"### 🎬 {row['title']}")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.write(f"⭐ **Rating:** {row['vote_average']}")
+        st.write(f"📊 **Similarity Score:** {row['similarity']:.2f}")
+    
+    with col2:
+        st.write(f"🔥 **Popularity:** {df.loc[df['title']==row['title'], 'popularity'].values[0]:.2f}")
+    
+    st.write("📝 **Overview:**")
+    st.write(row['overview'])
+    
+    st.divider()
 elif option == "Genre Based":
     genre = st.text_input("Enter genre (Action, Comedy, Horror etc)")
     if st.button("Recommend"):
