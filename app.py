@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import re, ast
+import re, ast, os, pickle
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -9,8 +9,6 @@ from sklearn.metrics.pairwise import cosine_similarity
 from sentence_transformers import SentenceTransformer
 import nltk
 import gdown
-import pickle
-import os
 
 st.set_page_config(page_title="🎬 Movie Recommender", layout="wide")
 st.title("🎬 Movie Recommendation System")
@@ -71,12 +69,12 @@ def load_transformer_model():
 
 transformer_model = load_transformer_model()
 
+# Cache embeddings to file
+embedding_file = "embeddings.pkl"
 @st.cache_data(show_spinner=True)
 def get_embeddings(tags_list):
     return transformer_model.encode(tags_list, show_progress_bar=True)
 
-# Save/load embeddings to avoid recomputation
-embedding_file = "embeddings.pkl"
 if os.path.exists(embedding_file):
     with open(embedding_file, "rb") as f:
         embeddings = pickle.load(f)
@@ -88,44 +86,38 @@ else:
 # ------------------ Recommender Functions ------------------ #
 def recommend(title, n=10):
     if title not in indices:
-        return ['Movie not found']
+        return pd.DataFrame([{'title':'Movie not found','vote_average':0,'overview':'','similarity':0}])
     idx = indices[title]
     sim_scores = cosine_similarity(tfidf_matrix[idx], tfidf_matrix).flatten()
     similar_idx = sim_scores.argsort()[::-1][1:n+1]
-    return df.iloc[similar_idx][['title','vote_average','overview']]
+    return df.iloc[similar_idx][['title','vote_average','overview']].copy().assign(similarity=sim_scores[similar_idx])
 
 def semantic_recommend(title, n=10):
     if title not in indices:
-        return ['Movie not found']
+        return pd.DataFrame([{'title':'Movie not found','vote_average':0,'overview':'','similarity':0}])
     idx = indices[title]
     movie_emb = embeddings[idx].reshape(1, -1)
     sim_scores = cosine_similarity(movie_emb, embeddings).flatten()
     similar_idx = sim_scores.argsort()[::-1][1:n+1]
-    return df.iloc[similar_idx][['title','vote_average','overview']]
+    return df.iloc[similar_idx][['title','vote_average','overview']].copy().assign(similarity=sim_scores[similar_idx])
 
 def hybrid_recommend(title, n=10, tfidf_weight=0.5, semantic_weight=0.5):
     if title not in indices:
-        return ['Movie not found']
+        return pd.DataFrame([{'title':'Movie not found','vote_average':0,'overview':'','similarity':0}])
     idx = indices[title]
-
-    # TF-IDF similarity
     tfidf_sim = cosine_similarity(tfidf_matrix[idx], tfidf_matrix).flatten()
-
-    # Transformer similarity
     movie_emb = embeddings[idx].reshape(1, -1)
     semantic_sim = cosine_similarity(movie_emb, embeddings).flatten()
-
-    # Combine similarities
     combined_sim = tfidf_weight * tfidf_sim + semantic_weight * semantic_sim
     similar_idx = combined_sim.argsort()[::-1][1:n+1]
-    return df.iloc[similar_idx][['title','vote_average','overview']]
+    return df.iloc[similar_idx][['title','vote_average','overview']].copy().assign(similarity=combined_sim[similar_idx])
 
 def recommend_by_genre_from_tags(user_genre, n=10):
     user_genre = user_genre.lower().strip()
     genre_filtered_df = df[df['tags'].str.contains(user_genre, case=False, na=False)]
     if genre_filtered_df.empty:
-        return ['Genre not found']
-    return genre_filtered_df.head(n)[['title','vote_average','overview']]
+        return pd.DataFrame([{'title':'Genre not found','vote_average':0,'overview':'','similarity':0}])
+    return genre_filtered_df.head(n)[['title','vote_average','overview']].copy().assign(similarity=1.0)
 
 # ------------------ Streamlit UI ------------------ #
 option = st.sidebar.selectbox(
@@ -146,9 +138,13 @@ if option in ["TF-IDF Movie Based", "Semantic Movie Based", "Hybrid Recommendati
             results = hybrid_recommend(movie_name)
             st.subheader("Recommended Movies (Hybrid)")
 
+        avg_similarity = results['similarity'].mean()
+        st.markdown(f"**Evaluation Metric:** Average similarity of recommendations = {avg_similarity:.2f}")
+
         for idx, row in results.iterrows():
-            st.markdown(f"**{row['title']}**  — Rating: {row['vote_average']}")
+            st.markdown(f"**{row['title']}**  — Rating: {row['vote_average']} — Similarity: {row['similarity']:.2f}")
             st.write(row['overview'])
+            st.markdown(f"*Why this movie?*: Because it shares similar themes, genre, and plot with **{movie_name}**.")
             st.write("---")
 
 elif option == "Genre Based":
@@ -159,4 +155,5 @@ elif option == "Genre Based":
         for idx, row in results.iterrows():
             st.markdown(f"**{row['title']}**  — Rating: {row['vote_average']}")
             st.write(row['overview'])
+            st.markdown(f"*Why this movie?*: Because it matches the genre **{genre}** you selected.")
             st.write("---")
