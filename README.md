@@ -1,4 +1,5 @@
 #🎬Movie Recommender System
+> Scroll down to check the demos to see how each method works in practice!
 
 A Streamlit-based Movie Recommendation System that suggests movies using multiple recommendation techniques including TF-IDF similarity, Semantic embeddings (Sentence Transformers), Hybrid recommendations, and Genre-based filtering.
 
@@ -74,3 +75,19 @@ Check out the demos of the Movie Recommendation System:
 ![Genre Demo](Genre-based_demo.gif)
 
 > Watch these GIFs to see the system in action!
+
+## 🧠 Recommendation Methods Summary
+
+- **TF-IDF Based Recommendation**  
+  Uses word matching in movie metadata (overview, genres, tagline).  
+  ⚠️ It mainly recommends movies with **similar words**, so it’s more surface-level.
+
+- **Semantic Transformer Based Recommendation**  
+  Uses **SentenceTransformer embeddings** to understand the **context and meaning** of movie descriptions.  
+  ✅ Recommends movies that are **contextually similar**, even if they don’t share exact words.
+
+- **Hybrid Recommendation**  
+  Combines TF-IDF and semantic similarity to balance **word matching** and **context understanding**.  
+  🎯 Provides more **accurate and meaningful movie suggestions**.
+
+
