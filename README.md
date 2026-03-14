@@ -53,3 +53,24 @@ Tagline
 
 Vote Average
 Popularity
+
+## 🎥 Demo
+
+Check out the demos of the Movie Recommendation System:
+
+### TF-IDF Based Recommendation
+![TF-IDF Demo](TF-IDF\ demo.gif)
+
+### Semantic Transformer Recommendation
+![Semantic Demo](Semantic-demo.gif)
+
+### Hybrid Recommendation
+![Hybrid Demo](Hybrid-demo.gif)
+
+### Another Hybrid Demo Example
+![Hybrid Demo 2](Hybrid-demo2.gif)
+
+### Genre-Based Recommendation
+![Genre Demo](Genre-based_demo.gif)
+
+> Watch these GIFs to see the system in action!
