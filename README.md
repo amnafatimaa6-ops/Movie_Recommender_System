@@ -86,6 +86,9 @@ Check out the demos of the Movie Recommendation System:
   Uses **SentenceTransformer embeddings** to understand the **context and meaning** of movie descriptions.  
   ✅ Recommends movies that are **contextually similar**, even if they don’t share exact words.
 
+  > live demo
+  > https://movierecommendersystem-qwaynni8hafwvr4t463sdz.streamlit.app/
+
 - **Hybrid Recommendation**  
   Combines TF-IDF and semantic similarity to balance **word matching** and **context understanding**.  
   🎯 Provides more **accurate and meaningful movie suggestions**.
