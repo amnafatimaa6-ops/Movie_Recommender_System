@@ -60,7 +60,7 @@ Popularity
 Check out the demos of the Movie Recommendation System:
 
 ### TF-IDF Based Recommendation
-![TF-IDF Demo](TF-IDF\ demo.gif)
+![TF-IDF Demo](TF-IDF%20demo.gif)
 
 ### Semantic Transformer Recommendation
 ![Semantic Demo](Semantic-demo.gif)
