@@ -2,20 +2,22 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import re, ast, os, pickle
+import urllib.parse
+import requests
+import nltk
+import gdown
+
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from sentence_transformers import SentenceTransformer
-import nltk
-import gdown
-import requests
 
-# ------------------ Streamlit setup ------------------ #
+# ------------------ Streamlit Setup ------------------ #
 st.set_page_config(page_title="🎬 Movie Recommender", layout="wide")
 st.title("🎬 Movie Recommendation System")
 
-# ------------------ Download Dataset ------------------ #
+# ------------------ Dataset Load ------------------ #
 file_id = "1KdZYGA_gR3Cip09HvwYZf7gGi6aQY6rm"
 url = f"https://drive.google.com/uc?id={file_id}"
 csv_path = "movies_metadata.csv"
@@ -25,7 +27,6 @@ if not os.path.exists(csv_path):
 
 df = pd.read_csv(csv_path, low_memory=False, encoding="utf-8", on_bad_lines="skip")
 
-# ------------------ Data Cleaning ------------------ #
 df = df[['title','overview','genres','tagline','vote_average','popularity']]
 df = df.drop_duplicates(subset='title').reset_index(drop=True)
 df = df.dropna(subset=['title'])
@@ -37,6 +38,7 @@ df['popularity'] = pd.to_numeric(df['popularity'], errors='coerce').fillna(0.0)
 # ------------------ NLP Setup ------------------ #
 nltk.download('stopwords')
 nltk.download('wordnet')
+
 stop_words = set(stopwords.words('english'))
 lemmatizer = WordNetLemmatizer()
 
@@ -63,11 +65,12 @@ df['tags'] = (df['overview'] + ' ' + df['genres'] + ' ' + df['tagline']).apply(p
 
 indices = pd.Series(df.index, index=df['title']).drop_duplicates()
 
+# ------------------ TF-IDF ------------------ #
 tfidf = TfidfVectorizer(max_features=5000, stop_words='english')
 tfidf_matrix = tfidf.fit_transform(df['tags'])
 
-# ------------------ Transformer Embeddings ------------------ #
-@st.cache_resource(show_spinner=True)
+# ------------------ Transformer ------------------ #
+@st.cache_resource
 def load_model():
     return SentenceTransformer('all-MiniLM-L6-v2')
 
@@ -83,29 +86,43 @@ else:
     with open(embedding_file, "wb") as f:
         pickle.dump(embeddings, f)
 
-# ------------------ 🌍 LIVE WIKIPEDIA DATA ------------------ #
+# ------------------ 🌍 LIVE WIKIPEDIA + FALLBACK ------------------ #
 def get_movie_details(title):
-    try:
-        url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{title}"
-        res = requests.get(url).json()
 
-        if "title" not in res:
-            return None
+    clean_title = urllib.parse.quote(title)
 
-        return {
-            "poster": res.get("thumbnail", {}).get("source"),
-            "summary": res.get("extract"),
-            "wiki": res.get("content_urls", {}).get("desktop", {}).get("page")
-        }
-    except:
-        return None
+    url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{clean_title}"
+    res = requests.get(url).json()
 
-# ------------------ 🎥 Trailer (NO API) ------------------ #
+    poster = None
+    summary = None
+    wiki = None
+
+    if "extract" in res:
+        summary = res.get("extract")
+
+    if "thumbnail" in res:
+        poster = res["thumbnail"].get("source")
+
+    if "content_urls" in res:
+        wiki = res["content_urls"]["desktop"]["page"]
+
+    # 🔥 fallback poster (always works)
+    if not poster:
+        poster = f"https://source.unsplash.com/300x450/?movie,{title}"
+
+    return {
+        "poster": poster,
+        "summary": summary,
+        "wiki": wiki
+    }
+
+# ------------------ 🎥 TRAILER (NO API) ------------------ #
 def get_trailer_link(title):
-    query = title.replace(" ", "+") + "+official+trailer"
+    query = urllib.parse.quote_plus(title + " official trailer")
     return f"https://www.youtube.com/results?search_query={query}"
 
-# ------------------ Recommenders ------------------ #
+# ------------------ RECOMMENDERS ------------------ #
 def recommend(title, n=10):
     idx = indices[title]
     sim = cosine_similarity(tfidf_matrix[idx], tfidf_matrix).flatten()
@@ -141,12 +158,15 @@ if option in ["TF-IDF Movie Based", "Semantic Movie Based", "Hybrid Recommendati
 
         if option == "TF-IDF Movie Based":
             results = recommend(movie_name)
+            st.subheader("TF-IDF Recommendations")
+
         elif option == "Semantic Movie Based":
             results = semantic_recommend(movie_name)
+            st.subheader("Semantic Recommendations")
+
         else:
             results = hybrid_recommend(movie_name)
-
-        st.subheader("🎬 Recommendations")
+            st.subheader("Hybrid Recommendations")
 
         for _, row in results.iterrows():
 
@@ -155,21 +175,21 @@ if option in ["TF-IDF Movie Based", "Semantic Movie Based", "Hybrid Recommendati
             col1, col2 = st.columns([1,2])
 
             with col1:
-                if data and data["poster"]:
-                    st.image(data["poster"], width=140)
-                else:
-                    st.write("🎬 No poster")
+                st.image(data["poster"], width=160)
 
             with col2:
-                st.markdown(f"### {row['title']}")
+                st.markdown(f"### 🎬 {row['title']}")
                 st.write(f"⭐ Rating: {row['vote_average']}")
                 st.write(f"🔥 Popularity: {row['popularity']:.2f}")
                 st.write(f"📊 Similarity: {row['similarity']:.2f}")
 
-                if data:
+                if data["summary"]:
                     st.write(data["summary"])
+
+                if data["wiki"]:
                     st.link_button("📖 Wikipedia", data["wiki"])
-                    st.link_button("▶ Trailer", get_trailer_link(row['title']))
+
+                st.link_button("▶ Watch Trailer", get_trailer_link(row['title']))
 
             st.divider()
 
@@ -179,17 +199,18 @@ elif option == "Genre Based":
     genre = st.text_input("Enter genre")
 
     if st.button("Recommend"):
+
         res = df[df['tags'].str.contains(genre.lower(), na=False)].head(10)
 
         for _, row in res.iterrows():
+
             data = get_movie_details(row['title'])
 
             st.markdown(f"### 🎬 {row['title']}")
             st.write(f"⭐ {row['vote_average']}")
 
-            if data and data["poster"]:
-                st.image(data["poster"], width=140)
-
+            st.image(data["poster"], width=160)
             st.write(row['overview'])
-            st.link_button("▶ Trailer", get_trailer_link(row['title']))
+
+            st.link_button("▶ Watch Trailer", get_trailer_link(row['title']))
             st.divider()
