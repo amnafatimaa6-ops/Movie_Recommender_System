@@ -13,11 +13,11 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from sentence_transformers import SentenceTransformer
 
-# ------------------ Streamlit Setup ------------------ #
+# ------------------ APP SETUP ------------------ #
 st.set_page_config(page_title="🎬 Movie Recommender", layout="wide")
 st.title("🎬 Movie Recommendation System")
 
-# ------------------ Dataset Load ------------------ #
+# ------------------ DATA LOAD ------------------ #
 file_id = "1KdZYGA_gR3Cip09HvwYZf7gGi6aQY6rm"
 url = f"https://drive.google.com/uc?id={file_id}"
 csv_path = "movies_metadata.csv"
@@ -35,7 +35,7 @@ df['overview'] = df['overview'].fillna('')
 df['tagline'] = df['tagline'].fillna('')
 df['popularity'] = pd.to_numeric(df['popularity'], errors='coerce').fillna(0.0)
 
-# ------------------ NLP Setup ------------------ #
+# ------------------ NLP ------------------ #
 nltk.download('stopwords')
 nltk.download('wordnet')
 
@@ -69,7 +69,7 @@ indices = pd.Series(df.index, index=df['title']).drop_duplicates()
 tfidf = TfidfVectorizer(max_features=5000, stop_words='english')
 tfidf_matrix = tfidf.fit_transform(df['tags'])
 
-# ------------------ Transformer ------------------ #
+# ------------------ TRANSFORMER ------------------ #
 @st.cache_resource
 def load_model():
     return SentenceTransformer('all-MiniLM-L6-v2')
@@ -86,36 +86,39 @@ else:
     with open(embedding_file, "wb") as f:
         pickle.dump(embeddings, f)
 
-# ------------------ 🌍 LIVE WIKIPEDIA + FALLBACK ------------------ #
+# ------------------ 🌍 SAFE WIKIPEDIA ------------------ #
 def get_movie_details(title):
 
-    clean_title = urllib.parse.quote(title)
+    try:
+        clean_title = urllib.parse.quote(title)
+        url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{clean_title}"
 
-    url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{clean_title}"
-    res = requests.get(url).json()
+        response = requests.get(url, timeout=5)
 
-    poster = None
-    summary = None
-    wiki = None
+        if response.status_code != 200:
+            raise Exception("No page")
 
-    if "extract" in res:
+        res = response.json()
+
+        poster = res.get("thumbnail", {}).get("source")
         summary = res.get("extract")
+        wiki = res.get("content_urls", {}).get("desktop", {}).get("page")
 
-    if "thumbnail" in res:
-        poster = res["thumbnail"].get("source")
+        if not poster:
+            poster = f"https://source.unsplash.com/300x450/?movie,{title}"
 
-    if "content_urls" in res:
-        wiki = res["content_urls"]["desktop"]["page"]
+        return {
+            "poster": poster,
+            "summary": summary,
+            "wiki": wiki
+        }
 
-    # 🔥 fallback poster (always works)
-    if not poster:
-        poster = f"https://source.unsplash.com/300x450/?movie,{title}"
-
-    return {
-        "poster": poster,
-        "summary": summary,
-        "wiki": wiki
-    }
+    except:
+        return {
+            "poster": f"https://source.unsplash.com/300x450/?movie,{title}",
+            "summary": None,
+            "wiki": None
+        }
 
 # ------------------ 🎥 TRAILER (NO API) ------------------ #
 def get_trailer_link(title):
