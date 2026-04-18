@@ -3,7 +3,6 @@ import pandas as pd
 import numpy as np
 import re, ast, os, pickle
 import urllib.parse
-import requests
 import nltk
 import gdown
 
@@ -13,11 +12,11 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from sentence_transformers import SentenceTransformer
 
-# ------------------ APP SETUP ------------------ #
+# ------------------ APP ------------------ #
 st.set_page_config(page_title="🎬 Movie Recommender", layout="wide")
 st.title("🎬 Movie Recommendation System")
 
-# ------------------ DATA LOAD ------------------ #
+# ------------------ DATA ------------------ #
 file_id = "1KdZYGA_gR3Cip09HvwYZf7gGi6aQY6rm"
 url = f"https://drive.google.com/uc?id={file_id}"
 csv_path = "movies_metadata.csv"
@@ -86,44 +85,10 @@ else:
     with open(embedding_file, "wb") as f:
         pickle.dump(embeddings, f)
 
-# ------------------ 🌍 SAFE WIKIPEDIA ------------------ #
-def get_movie_details(title):
-
-    try:
-        clean_title = urllib.parse.quote(title)
-        url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{clean_title}"
-
-        response = requests.get(url, timeout=5)
-
-        if response.status_code != 200:
-            raise Exception("No page")
-
-        res = response.json()
-
-        poster = res.get("thumbnail", {}).get("source")
-        summary = res.get("extract")
-        wiki = res.get("content_urls", {}).get("desktop", {}).get("page")
-
-        if not poster:
-            poster = f"https://source.unsplash.com/300x450/?movie,{title}"
-
-        return {
-            "poster": poster,
-            "summary": summary,
-            "wiki": wiki
-        }
-
-    except:
-        return {
-            "poster": f"https://source.unsplash.com/300x450/?movie,{title}",
-            "summary": None,
-            "wiki": None
-        }
-
-# ------------------ 🎥 TRAILER (NO API) ------------------ #
-def get_trailer_link(title):
+# ------------------ 🎥 TRAILER (EMBED INSIDE APP) ------------------ #
+def get_youtube_embed(title):
     query = urllib.parse.quote_plus(title + " official trailer")
-    return f"https://www.youtube.com/results?search_query={query}"
+    return f"https://www.youtube.com/embed?listType=search&list={query}"
 
 # ------------------ RECOMMENDERS ------------------ #
 def recommend(title, n=10):
@@ -152,7 +117,7 @@ option = st.sidebar.selectbox(
     ("TF-IDF Movie Based", "Semantic Movie Based", "Hybrid Recommendation", "Genre Based")
 )
 
-# ------------------ MOVIE MODE ------------------ #
+# ------------------ MAIN ------------------ #
 if option in ["TF-IDF Movie Based", "Semantic Movie Based", "Hybrid Recommendation"]:
 
     movie_name = st.selectbox("Select a movie", df['title'].sort_values())
@@ -173,30 +138,24 @@ if option in ["TF-IDF Movie Based", "Semantic Movie Based", "Hybrid Recommendati
 
         for _, row in results.iterrows():
 
-            data = get_movie_details(row['title'])
+            st.markdown(f"## 🎬 {row['title']}")
 
-            col1, col2 = st.columns([1,2])
+            col1, col2 = st.columns([2,1])
 
             with col1:
-                st.image(data["poster"], width=160)
-
-            with col2:
-                st.markdown(f"### 🎬 {row['title']}")
                 st.write(f"⭐ Rating: {row['vote_average']}")
                 st.write(f"🔥 Popularity: {row['popularity']:.2f}")
                 st.write(f"📊 Similarity: {row['similarity']:.2f}")
+                st.write("📝 Overview:")
+                st.write(row['overview'])
 
-                if data["summary"]:
-                    st.write(data["summary"])
-
-                if data["wiki"]:
-                    st.link_button("📖 Wikipedia", data["wiki"])
-
-                st.link_button("▶ Watch Trailer", get_trailer_link(row['title']))
+            with col2:
+                st.markdown("### ▶ Trailer")
+                st.video(get_youtube_embed(row['title']))
 
             st.divider()
 
-# ------------------ GENRE MODE ------------------ #
+# ------------------ GENRE ------------------ #
 elif option == "Genre Based":
 
     genre = st.text_input("Enter genre")
@@ -207,13 +166,11 @@ elif option == "Genre Based":
 
         for _, row in res.iterrows():
 
-            data = get_movie_details(row['title'])
-
-            st.markdown(f"### 🎬 {row['title']}")
+            st.markdown(f"## 🎬 {row['title']}")
             st.write(f"⭐ {row['vote_average']}")
-
-            st.image(data["poster"], width=160)
             st.write(row['overview'])
 
-            st.link_button("▶ Watch Trailer", get_trailer_link(row['title']))
+            st.markdown("### ▶ Trailer")
+            st.video(get_youtube_embed(row['title']))
+
             st.divider()
