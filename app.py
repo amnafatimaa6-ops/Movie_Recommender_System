@@ -9,12 +9,13 @@ from sklearn.metrics.pairwise import cosine_similarity
 from sentence_transformers import SentenceTransformer
 import nltk
 import gdown
+import requests
 
 # ------------------ Streamlit setup ------------------ #
 st.set_page_config(page_title="🎬 Movie Recommender", layout="wide")
 st.title("🎬 Movie Recommendation System")
 
-# ------------------ Download & Load Dataset ------------------ #
+# ------------------ Download Dataset ------------------ #
 file_id = "1KdZYGA_gR3Cip09HvwYZf7gGi6aQY6rm"
 url = f"https://drive.google.com/uc?id={file_id}"
 csv_path = "movies_metadata.csv"
@@ -25,29 +26,20 @@ if not os.path.exists(csv_path):
 df = pd.read_csv(csv_path, low_memory=False, encoding="utf-8", on_bad_lines="skip")
 
 # ------------------ Data Cleaning ------------------ #
-# Keep only relevant columns
 df = df[['title','overview','genres','tagline','vote_average','popularity']]
-
-# Drop duplicates by title
 df = df.drop_duplicates(subset='title').reset_index(drop=True)
-
-# Drop rows without title
 df = df.dropna(subset=['title'])
 
-# Fill missing overview/tagline
 df['overview'] = df['overview'].fillna('')
 df['tagline'] = df['tagline'].fillna('')
-
-# Make sure popularity is numeric
 df['popularity'] = pd.to_numeric(df['popularity'], errors='coerce').fillna(0.0)
 
-# ------------------ NLTK Setup ------------------ #
+# ------------------ NLP Setup ------------------ #
 nltk.download('stopwords')
 nltk.download('wordnet')
 stop_words = set(stopwords.words('english'))
 lemmatizer = WordNetLemmatizer()
 
-# ------------------ Text Preprocessing ------------------ #
 def parse_genres(x):
     try:
         if isinstance(x, list):
@@ -55,8 +47,7 @@ def parse_genres(x):
         elif isinstance(x, str):
             data = ast.literal_eval(x)
             return ' '.join([i['name'] for i in data])
-        else:
-            return ''
+        return ''
     except:
         return ''
 
@@ -70,118 +61,135 @@ def process_text(text):
 df['genres'] = df['genres'].apply(parse_genres)
 df['tags'] = (df['overview'] + ' ' + df['genres'] + ' ' + df['tagline']).apply(process_text)
 
-# ------------------ Indices & TF-IDF ------------------ #
 indices = pd.Series(df.index, index=df['title']).drop_duplicates()
+
 tfidf = TfidfVectorizer(max_features=5000, stop_words='english')
 tfidf_matrix = tfidf.fit_transform(df['tags'])
 
-# ------------------ Transformer Model & Embeddings ------------------ #
+# ------------------ Transformer Embeddings ------------------ #
 @st.cache_resource(show_spinner=True)
-def load_transformer_model():
+def load_model():
     return SentenceTransformer('all-MiniLM-L6-v2')
 
-transformer_model = load_transformer_model()
+model = load_model()
 
 embedding_file = "embeddings.pkl"
-
-@st.cache_data(show_spinner=True)
-def get_embeddings(tags_list):
-    return transformer_model.encode(tags_list, show_progress_bar=True)
 
 if os.path.exists(embedding_file):
     with open(embedding_file, "rb") as f:
         embeddings = pickle.load(f)
 else:
-    embeddings = get_embeddings(df['tags'].tolist())
+    embeddings = model.encode(df['tags'].tolist())
     with open(embedding_file, "wb") as f:
         pickle.dump(embeddings, f)
 
-# ------------------ Recommender Functions ------------------ #
+# ------------------ 🌍 LIVE WIKIPEDIA DATA ------------------ #
+def get_movie_details(title):
+    try:
+        url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{title}"
+        res = requests.get(url).json()
+
+        if "title" not in res:
+            return None
+
+        return {
+            "poster": res.get("thumbnail", {}).get("source"),
+            "summary": res.get("extract"),
+            "wiki": res.get("content_urls", {}).get("desktop", {}).get("page")
+        }
+    except:
+        return None
+
+# ------------------ 🎥 Trailer (NO API) ------------------ #
+def get_trailer_link(title):
+    query = title.replace(" ", "+") + "+official+trailer"
+    return f"https://www.youtube.com/results?search_query={query}"
+
+# ------------------ Recommenders ------------------ #
 def recommend(title, n=10):
-    if title not in indices:
-        return pd.DataFrame([{'title':'Movie not found','vote_average':0,'overview':'','similarity':0,'popularity':0}])
     idx = indices[title]
-    sim_scores = cosine_similarity(tfidf_matrix[idx], tfidf_matrix).flatten()
-    similar_idx = sim_scores.argsort()[::-1][1:n+1]
-    return df.iloc[similar_idx][['title','vote_average','overview','popularity']].copy().assign(similarity=sim_scores[similar_idx])
+    sim = cosine_similarity(tfidf_matrix[idx], tfidf_matrix).flatten()
+    top = sim.argsort()[::-1][1:n+1]
+    return df.iloc[top].assign(similarity=sim[top])
 
 def semantic_recommend(title, n=10):
-    if title not in indices:
-        return pd.DataFrame([{'title':'Movie not found','vote_average':0,'overview':'','similarity':0,'popularity':0}])
     idx = indices[title]
-    movie_emb = embeddings[idx].reshape(1, -1)
-    sim_scores = cosine_similarity(movie_emb, embeddings).flatten()
-    similar_idx = sim_scores.argsort()[::-1][1:n+1]
-    return df.iloc[similar_idx][['title','vote_average','overview','popularity']].copy().assign(similarity=sim_scores[similar_idx])
+    sim = cosine_similarity(embeddings[idx].reshape(1,-1), embeddings).flatten()
+    top = sim.argsort()[::-1][1:n+1]
+    return df.iloc[top].assign(similarity=sim[top])
 
-def hybrid_recommend(title, n=10, tfidf_weight=0.5, semantic_weight=0.5):
-    if title not in indices:
-        return pd.DataFrame([{'title':'Movie not found','vote_average':0,'overview':'','similarity':0,'popularity':0}])
+def hybrid_recommend(title, n=10):
     idx = indices[title]
-    
-    tfidf_sim = cosine_similarity(tfidf_matrix[idx], tfidf_matrix).flatten()
-    movie_emb = embeddings[idx].reshape(1, -1)
-    semantic_sim = cosine_similarity(movie_emb, embeddings).flatten()
+    tf = cosine_similarity(tfidf_matrix[idx], tfidf_matrix).flatten()
+    sem = cosine_similarity(embeddings[idx].reshape(1,-1), embeddings).flatten()
+    combined = 0.5*tf + 0.5*sem
+    top = combined.argsort()[::-1][1:n+1]
+    return df.iloc[top].assign(similarity=combined[top])
 
-    # Sometimes arrays can mismatch in shape; make sure they are same length
-    min_len = min(len(tfidf_sim), len(semantic_sim))
-    tfidf_sim = tfidf_sim[:min_len]
-    semantic_sim = semantic_sim[:min_len]
-
-    combined_sim = tfidf_weight * tfidf_sim + semantic_weight * semantic_sim
-    similar_idx = combined_sim.argsort()[::-1][1:n+1]
-    return df.iloc[similar_idx][['title','vote_average','overview','popularity']].copy().assign(similarity=combined_sim[similar_idx])
-
-def recommend_by_genre_from_tags(user_genre, n=10):
-    user_genre = user_genre.lower().strip()
-    genre_filtered_df = df[df['tags'].str.contains(user_genre, case=False, na=False)]
-    if genre_filtered_df.empty:
-        return pd.DataFrame([{'title':'Genre not found','vote_average':0,'overview':'','similarity':0,'popularity':0}])
-    return genre_filtered_df.head(n)[['title','vote_average','overview','popularity']].copy().assign(similarity=1.0)
-
-# ------------------ Streamlit UI ------------------ #
+# ------------------ UI ------------------ #
 option = st.sidebar.selectbox(
     "Choose Recommendation Type",
     ("TF-IDF Movie Based", "Semantic Movie Based", "Hybrid Recommendation", "Genre Based")
 )
 
+# ------------------ MOVIE MODE ------------------ #
 if option in ["TF-IDF Movie Based", "Semantic Movie Based", "Hybrid Recommendation"]:
+
     movie_name = st.selectbox("Select a movie", df['title'].sort_values())
+
     if st.button("Recommend"):
+
         if option == "TF-IDF Movie Based":
             results = recommend(movie_name)
-            st.subheader("Recommended Movies (TF-IDF)")
         elif option == "Semantic Movie Based":
             results = semantic_recommend(movie_name)
-            st.subheader("Recommended Movies (Semantic Transformer)")
         else:
             results = hybrid_recommend(movie_name)
-            st.subheader("Recommended Movies (Hybrid)")
 
-        avg_similarity = results['similarity'].mean()
-        st.markdown(f"**Evaluation Metric:** Average similarity of recommendations = {avg_similarity:.2f}")
+        st.subheader("🎬 Recommendations")
 
-        for idx, row in results.iterrows():
-            st.markdown(f"### 🎬 {row['title']}")
+        for _, row in results.iterrows():
 
-            col1, col2 = st.columns(2)
+            data = get_movie_details(row['title'])
+
+            col1, col2 = st.columns([1,2])
+
             with col1:
-                st.write(f"⭐ **Rating:** {row['vote_average']}")
-                st.write(f"📊 **Similarity Score:** {row['similarity']:.2f}")
-            with col2:
-                st.write(f"🔥 **Popularity:** {float(row['popularity']):.2f}")
+                if data and data["poster"]:
+                    st.image(data["poster"], width=140)
+                else:
+                    st.write("🎬 No poster")
 
-            st.write("📝 **Overview:**")
-            st.write(row['overview'])
+            with col2:
+                st.markdown(f"### {row['title']}")
+                st.write(f"⭐ Rating: {row['vote_average']}")
+                st.write(f"🔥 Popularity: {row['popularity']:.2f}")
+                st.write(f"📊 Similarity: {row['similarity']:.2f}")
+
+                if data:
+                    st.write(data["summary"])
+                    st.link_button("📖 Wikipedia", data["wiki"])
+                    st.link_button("▶ Trailer", get_trailer_link(row['title']))
+
             st.divider()
 
+# ------------------ GENRE MODE ------------------ #
 elif option == "Genre Based":
-    genre = st.text_input("Enter genre (Action, Comedy, Horror etc)")
+
+    genre = st.text_input("Enter genre")
+
     if st.button("Recommend"):
-        results = recommend_by_genre_from_tags(genre)
-        st.subheader(f"Recommended Movies for Genre: {genre}")
-        for idx, row in results.iterrows():
+        res = df[df['tags'].str.contains(genre.lower(), na=False)].head(10)
+
+        for _, row in res.iterrows():
+            data = get_movie_details(row['title'])
+
             st.markdown(f"### 🎬 {row['title']}")
-            st.write(f"⭐ **Rating:** {row['vote_average']}")
+            st.write(f"⭐ {row['vote_average']}")
+
+            if data and data["poster"]:
+                st.image(data["poster"], width=140)
+
             st.write(row['overview'])
+            st.link_button("▶ Trailer", get_trailer_link(row['title']))
             st.divider()
