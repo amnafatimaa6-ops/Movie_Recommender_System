@@ -69,7 +69,7 @@ indices = pd.Series(df.index, index=df['title']).drop_duplicates()
 tfidf = TfidfVectorizer(max_features=5000, stop_words='english')
 tfidf_matrix = tfidf.fit_transform(df['tags'])
 
-# ------------------ TRANSFORMER ------------------ #
+# ------------------ MODEL ------------------ #
 @st.cache_resource
 def load_model():
     return SentenceTransformer('all-MiniLM-L6-v2')
@@ -86,14 +86,13 @@ else:
     with open(embedding_file, "wb") as f:
         pickle.dump(embeddings, f)
 
-# ------------------ 🎥 REAL TRAILER FIX ------------------ #
+# ------------------ TRAILER (REAL FIX) ------------------ #
 def get_trailer_embed(title):
     try:
         query = title + " official trailer"
         url = f"https://www.youtube.com/results?search_query={urllib.parse.quote_plus(query)}"
 
         html = requests.get(url, timeout=5).text
-
         video_ids = re.findall(r"watch\?v=(.{11})", html)
 
         if video_ids:
@@ -164,18 +163,28 @@ if option in ["TF-IDF Movie Based", "Semantic Movie Based", "Hybrid Recommendati
                 st.write(row['overview'])
 
             with col2:
-                st.markdown("### ▶ Trailer")
+                st.markdown("### 🎥 Trailer")
 
                 embed_url = get_trailer_embed(row['title'])
 
                 if embed_url:
-                    st.video(embed_url)
+                    st.components.v1.html(
+                        f"""
+                        <iframe width="100%" height="420"
+                        src="{embed_url}"
+                        frameborder="0"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowfullscreen>
+                        </iframe>
+                        """,
+                        height=450
+                    )
                 else:
                     st.write("Trailer not found")
 
             st.divider()
 
-# ------------------ GENRE MODE ------------------ #
+# ------------------ GENRE ------------------ #
 elif option == "Genre Based":
 
     genre = st.text_input("Enter genre")
@@ -193,7 +202,18 @@ elif option == "Genre Based":
             embed_url = get_trailer_embed(row['title'])
 
             if embed_url:
-                st.video(embed_url)
+                st.components.v1.html(
+                    f"""
+                    <iframe width="100%" height="420"
+                    src="{embed_url}"
+                    frameborder="0"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowfullscreen>
+                    </iframe>
+                    """,
+                    height=450
+                )
+
             else:
                 st.write("Trailer not found")
 
