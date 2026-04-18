@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import re, ast, os, pickle
 import urllib.parse
+import requests
 import nltk
 import gdown
 
@@ -85,10 +86,23 @@ else:
     with open(embedding_file, "wb") as f:
         pickle.dump(embeddings, f)
 
-# ------------------ 🎥 TRAILER (EMBED INSIDE APP) ------------------ #
-def get_youtube_embed(title):
-    query = urllib.parse.quote_plus(title + " official trailer")
-    return f"https://www.youtube.com/embed?listType=search&list={query}"
+# ------------------ 🎥 REAL TRAILER FIX ------------------ #
+def get_trailer_embed(title):
+    try:
+        query = title + " official trailer"
+        url = f"https://www.youtube.com/results?search_query={urllib.parse.quote_plus(query)}"
+
+        html = requests.get(url, timeout=5).text
+
+        video_ids = re.findall(r"watch\?v=(.{11})", html)
+
+        if video_ids:
+            return f"https://www.youtube.com/embed/{video_ids[0]}"
+
+        return None
+
+    except:
+        return None
 
 # ------------------ RECOMMENDERS ------------------ #
 def recommend(title, n=10):
@@ -151,11 +165,17 @@ if option in ["TF-IDF Movie Based", "Semantic Movie Based", "Hybrid Recommendati
 
             with col2:
                 st.markdown("### ▶ Trailer")
-                st.video(get_youtube_embed(row['title']))
+
+                embed_url = get_trailer_embed(row['title'])
+
+                if embed_url:
+                    st.video(embed_url)
+                else:
+                    st.write("Trailer not found")
 
             st.divider()
 
-# ------------------ GENRE ------------------ #
+# ------------------ GENRE MODE ------------------ #
 elif option == "Genre Based":
 
     genre = st.text_input("Enter genre")
@@ -170,7 +190,11 @@ elif option == "Genre Based":
             st.write(f"⭐ {row['vote_average']}")
             st.write(row['overview'])
 
-            st.markdown("### ▶ Trailer")
-            st.video(get_youtube_embed(row['title']))
+            embed_url = get_trailer_embed(row['title'])
+
+            if embed_url:
+                st.video(embed_url)
+            else:
+                st.write("Trailer not found")
 
             st.divider()
