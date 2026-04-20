@@ -3,18 +3,32 @@
 
 A Streamlit-based Movie Recommendation System that suggests movies using multiple recommendation techniques including TF-IDF similarity, Semantic embeddings (Sentence Transformers), Hybrid recommendations, and Genre-based filtering.
 
+
 The application allows users to select a movie or genre and receive similar movie suggestions along with ratings, similarity scores, popularity, and overview.
+
 🚀 Features
+
 TF-IDF Based Recommendation
+
 Uses TF-IDF vectorization on movie metadata.
+
 Calculates similarity using cosine similarity.
+
+------------------------------------------------------------------
+
 Semantic Recommendation
+
 Uses Sentence Transformers (all-MiniLM-L6-v2) to generate embeddings.
+
 Captures deeper semantic meaning of movie descriptions.
 
+------------------------------------------------------------------
+ 
 Hybrid Recommendation
 Combines TF-IDF similarity and semantic similarity.
 Provides more accurate and balanced recommendations.
+
+------------------------------------------------------------------
 
 Genre Based Recommendation
 Allows users to search movies by genre keywords.
@@ -62,19 +76,41 @@ Check out the demos of the Movie Recommendation System:
 ### TF-IDF Based Recommendation
 ![TF-IDF Demo](TF-IDF%20demo.gif)
 
+---
+
 ### Semantic Transformer Recommendation
 ![Semantic Demo](Semantic-demo.gif)
+
+---
 
 ### Hybrid Recommendation
 ![Hybrid Demo](Hybrid-demo.gif)
 
+---
+
 ### Another Hybrid Demo Example
 ![Hybrid Demo 2](Hybrid-demo2.gif)
+
+---
 
 ### Genre-Based Recommendation
 ![Genre Demo](Genre-based_demo.gif)
 
+---
+
+### 🔹 Updated Demo 1
+![Updated Demo 1](updateddemo1.gif)
+
+---
+
+### 🔹 Updated Demo 2
+![Updated Demo 2](updateddemo2.gif)
+
 > Watch these GIFs to see the system in action!
+
+### 🆕 Update Note
+
+> Added **YouTube trailer integration layer**, allowing real-time retrieval and embedding of official trailers within the recommendation workflow, improving interpretability and user engagement with recommended content.
 
 ## 🧠 Recommendation Methods Summary
 
