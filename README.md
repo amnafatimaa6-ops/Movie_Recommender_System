@@ -7,6 +7,8 @@ A Streamlit-based Movie Recommendation System that suggests movies using multipl
 
 The application allows users to select a movie or genre and receive similar movie suggestions along with ratings, similarity scores, popularity, and overview.
 
+----------------------------------------------------------------
+
 🚀 Features
 
 TF-IDF Based Recommendation
