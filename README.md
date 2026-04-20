@@ -1,4 +1,5 @@
-#🎬Movie Recommender System
+# 🎬 MOVIE RECOMMENDER SYSTEM
+
 > Scroll down to check the demos to see how each method works in practice!
 
 A Streamlit-based Movie Recommendation System that suggests movies using multiple recommendation techniques including TF-IDF similarity, Semantic embeddings (Sentence Transformers), Hybrid recommendations, and Genre-based filtering.
