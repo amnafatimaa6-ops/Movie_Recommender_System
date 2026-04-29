@@ -78,37 +78,37 @@ Check out the demos of the Movie Recommendation System:
 
 
 ### TF-IDF Based Recommendation
-![TF-IDF Demo](demos/TF-IDF%20demo.gif)
+![TF-IDF Demo](demo/TF-IDF%20demo.gif)
 
 ---
 
 ### Semantic Transformer Recommendation
-![Semantic Demo](demos/Semantic-demo.gif)
+![Semantic Demo](demo/Semantic-demo.gif)
 
 ---
 
 ### Hybrid Recommendation
-![Hybrid Demo](demos/Hybrid-demo.gif)
+![Hybrid Demo](demo/Hybrid-demo.gif)
 
 ---
 
 ### Another Hybrid Demo Example
-![Hybrid Demo 2](demos/Hybrid-demo2.gif)
+![Hybrid Demo 2](demo/Hybrid-demo2.gif)
 
 ---
 
 ### Genre-Based Recommendation
-![Genre Demo](demos/Genre-based_demo.gif)
+![Genre Demo](demo/Genre-based_demo.gif)
 
 ---
 
 ### 🔹 Updated Demo 1
-![Updated Demo 1](demos/updateddemo1.gif)
+![Updated Demo 1](demo/updateddemo1.gif)
 
 ---
 
 ### 🔹 Updated Demo 2
-![Updated Demo 2](demos/updateddemo2.gif)
+![Updated Demo 2](demo/updateddemo2.gif)
 > Watch these GIFs to see the system in action!
 
 ### 🆕 Update Note
